@@ -199,7 +199,7 @@ def db_history(bin_id):
 
 if __name__ == '__main__':
     print("=" * 60)
-    print("🚀 SMART BIN DASHBOARD WITH MONGODB")
+    print(" SMART BIN DASHBOARD WITH MONGODB")
     print("=" * 60)
     print("Access: http://136.112.221.13:5000")
     print("API Endpoints:")
