@@ -1,196 +1,210 @@
 #!/usr/bin/env python3
-from flask import Flask, jsonify, render_template_string
+from flask import Flask, jsonify, render_template, request
 import json
 import paho.mqtt.client as mqtt
 import threading
 from datetime import datetime
+from collections import deque, OrderedDict
+from pymongo import MongoClient
+import time
+import os
 
 app = Flask(__name__)
-bin_data = {}
+
+# MongoDB connection
+try:
+    mongo_client = MongoClient('mongodb://localhost:27017/')
+    db = mongo_client['smartbin_db']
+    collection = db['bin_readings']
+    print("✓ MongoDB connected successfully")
+except Exception as e:
+    print(f"⚠ MongoDB connection failed: {e}")
+    collection = None
+
+# Memory storage
+bin_data = OrderedDict()
+BIN_ORDER = ["BIN_001", "BIN_002", "BIN_003", "BIN_004", "BIN_005"]
+LOCATIONS = ["CS Building", "Library", "Cafe", "Parking", "Hostel"]
+bin_history = {bin_id: deque(maxlen=20) for bin_id in BIN_ORDER}
 
 def on_message(client, userdata, msg):
     try:
         data = json.loads(msg.payload.decode())
         bin_id = data['bin_id']
+        
+        # Add icon if missing
+        if 'icon' not in data:
+            fill = data.get('fill_level', 0)
+            if fill < 30:
+                data['icon'] = '🟢'
+            elif fill < 70:
+                data['icon'] = '🟡'
+            elif fill < 90:
+                data['icon'] = '🟠'
+            else:
+                data['icon'] = '🔴'
+        
+        data['received'] = datetime.now().strftime('%H:%M:%S')
+        
+        # Store in memory
         bin_data[bin_id] = data
-        bin_data[bin_id]['received'] = datetime.now().strftime('%H:%M:%S')
-        print(f"✓ {bin_id}: {data['fill_level']}%")
-    except:
-        pass
+        bin_history[bin_id].append({
+            'time': datetime.now().strftime('%H:%M:%S'),
+            'fill_level': data['fill_level'],
+            'timestamp': time.time() * 1000
+        })
+        
+        # Save to MongoDB
+        if collection:
+            try:
+                collection.insert_one({
+                    'bin_id': bin_id,
+                    'location': data['location'],
+                    'fill_level': data['fill_level'],
+                    'status': data['status'],
+                    'timestamp': datetime.now()
+                })
+                print(f"✓ {bin_id}: {data['fill_level']}% (saved to DB)")
+            except Exception as e:
+                print(f"✗ {bin_id}: DB error")
+        else:
+            print(f"✓ {bin_id}: {data['fill_level']}%")
+            
+    except Exception as e:
+        print(f"Error: {e}")
 
 def mqtt_thread():
-    client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2)
-    client.on_message = on_message
-    client.connect("localhost", 1883, 60)
-    client.subscribe("smartbin/live")
-    client.loop_forever()
+    try:
+        client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2)
+        client.on_message = on_message
+        client.connect("localhost", 1883, 60)
+        client.subscribe("smartbin/live")
+        print("✓ MQTT connected successfully")
+        client.loop_forever()
+    except Exception as e:
+        print(f"✗ MQTT connection failed: {e}")
 
 threading.Thread(target=mqtt_thread, daemon=True).start()
 
-HTML = """
-<!DOCTYPE html>
-<html>
-<head>
-    <title>Smart Bin Live Dashboard</title>
-    <style>
-        body { font-family: Arial; margin: 30px; background: #f5f5f5; }
-        .container { max-width: 1000px; margin: 0 auto; background: white; padding: 20px; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
-        h1 { color: #2E7D32; border-bottom: 2px solid #4CAF50; padding-bottom: 10px; }
-        .metrics { display: flex; gap: 20px; margin: 20px 0; }
-        .metric-box { flex: 1; background: #4CAF50; color: white; padding: 15px; border-radius: 8px; text-align: center; }
-        .metric-value { font-size: 28px; font-weight: bold; }
-        table { width: 100%; border-collapse: collapse; margin-top: 20px; }
-        th { background: #4CAF50; color: white; padding: 12px; }
-        td { padding: 10px; border-bottom: 1px solid #ddd; }
-        .progress { background: #e0e0e0; height: 20px; border-radius: 4px; overflow: hidden; }
-        .fill { background: #4CAF50; height: 100%; color: white; text-align: center; font-size: 12px; }
-        .low { color: #4CAF50; }
-        .moderate { color: #FFC107; }
-        .high { color: #FF9800; }
-        .overflow { color: #F44336; }
-    </style>
-    <script>
-    async function updateDashboard() {
-        const response = await fetch('/api/data');
-        const data = await response.json();
-        
-        // Update metrics
-        document.getElementById('totalBins').textContent = data.total;
-        document.getElementById('avgFill').textContent = data.avg.toFixed(1) + '%';
-        document.getElementById('fullBins').textContent = data.full;
-        
-        // Update table
-        let tableBody = document.getElementById('binTable');
-        tableBody.innerHTML = '';
-        
-        data.bins.forEach(bin => {
-            let row = tableBody.insertRow();
-            row.innerHTML = `
-                <td><strong>${bin.icon} ${bin.id}</strong></td>
-                <td>${bin.location}</td>
-                <td>
-                    <div class="progress">
-                        <div class="fill" style="width: ${bin.fill}%">${bin.fill}%</div>
-                    </div>
-                </td>
-                <td class="${bin.status_class}"><strong>${bin.status}</strong></td>
-                <td>${bin.time}</td>
-            `;
-        });
-    }
-    
-    // Update every 10 seconds
-    setInterval(updateDashboard, 10000);
-    window.onload = updateDashboard;
-    </script>
-</head>
-<body>
-    <div class="container">
-        <h1>🗑️ Smart Bin Monitoring System</h1>
-        <p>CPC357 IoT Assignment - Live Data Dashboard</p>
-        
-        <div class="metrics">
-            <div class="metric-box">
-                <div>Total Bins</div>
-                <div class="metric-value" id="totalBins">0</div>
-            </div>
-            <div class="metric-box">
-                <div>Average Fill</div>
-                <div class="metric-value" id="avgFill">0%</div>
-            </div>
-            <div class="metric-box">
-                <div>Need Emptying</div>
-                <div class="metric-value" id="fullBins">0</div>
-            </div>
-        </div>
-        
-        <h2>📊 Live Bin Status</h2>
-        <table>
-            <thead>
-                <tr>
-                    <th>Bin ID</th>
-                    <th>Location</th>
-                    <th>Fill Level</th>
-                    <th>Status</th>
-                    <th>Last Update</th>
-                </tr>
-            </thead>
-            <tbody id="binTable">
-                <tr><td colspan="5" style="text-align:center;">Loading data from MQTT...</td></tr>
-            </tbody>
-        </table>
-        
-        <div style="margin-top: 30px; padding: 15px; background: #f8f9fa; border-radius: 5px;">
-            <p><strong>System Status:</strong> 
-                <span style="color: #4CAF50;">✓ MQTT Connected</span> | 
-                <span style="color: #4CAF50;">✓ Simulator Running</span> | 
-                <span style="color: #4CAF50;">✓ Dashboard Active</span>
-            </p>
-            <p><em>Data updates automatically every 10 seconds</em></p>
-        </div>
-    </div>
-</body>
-</html>
-"""
-
 @app.route('/')
 def home():
-    return render_template_string(HTML)
+    return render_template('index.html')
 
 @app.route('/api/data')
 def api_data():
-    bins = list(bin_data.values())
+    bins = []
     
-    if not bins:
-        return jsonify({
-            'total': 0,
-            'avg': 0,
-            'full': 0,
-            'bins': []
-        })
-    
-    total = len(bins)
-    avg = sum(b['fill_level'] for b in bins) / total
-    
-    # Count bins with fill_level > 70 (HIGH and OVERFLOW)
-    full = sum(1 for b in bins if b['fill_level'] > 70)
-    
-    formatted = []
-    for b in bins:
-        status = b['status']
-        
-        if status == "LOW":
-            status_class = 'low'
-        elif status == "MODERATE":
-            status_class = 'moderate'
-        elif status == "HIGH":
-            status_class = 'high'
-        elif status == "OVERFLOW":
-            status_class = 'overflow'
+    for bin_id in BIN_ORDER:
+        if bin_id in bin_data:
+            b = bin_data[bin_id]
         else:
-            status_class = 'moderate'
+            b = {
+                'bin_id': bin_id,
+                'location': LOCATIONS[BIN_ORDER.index(bin_id)],
+                'fill_level': 0,
+                'status': 'OFFLINE',
+                'icon': '⚫',
+                'received': '--:--:--',
+                'timestamp': '--:--:--'
+            }
         
-        formatted.append({
+        status = b['status']
+        status_class = status.lower() if status in ['LOW', 'MODERATE', 'HIGH', 'OVERFLOW', 'offline'] else 'moderate'
+        
+        bins.append({
             'id': b['bin_id'],
             'location': b['location'],
             'fill': b['fill_level'],
             'status': status,
             'icon': b.get('icon', '🗑️'),
             'status_class': status_class,
-            'time': b['timestamp']
+            'time': b.get('received', b.get('timestamp', '--:--:--'))
         })
     
+    active_bins = [b for b in bins if b['status'] != 'OFFLINE']
+    
+    if active_bins:
+        total = len(active_bins)
+        avg = sum(b['fill'] for b in active_bins) / total
+        full = sum(1 for b in active_bins if b['fill'] > 70)
+    else:
+        total = avg = full = 0
+    
     return jsonify({
-        'total': total,
+        'total': len(bins),
         'avg': round(avg, 1),
         'full': full,
-        'bins': formatted
+        'bins': bins
     })
+
+@app.route('/api/history')
+def api_history():
+    history = OrderedDict()
+    for bin_id in BIN_ORDER:
+        if bin_id in bin_history:
+            history[bin_id] = list(bin_history[bin_id])[-10:]
+        else:
+            history[bin_id] = []
+    
+    return jsonify(history)
+
+@app.route('/api/db/stats')
+def db_stats():
+    if not collection:
+        return jsonify({'error': 'Database not available'})
+    
+    try:
+        count = collection.count_documents({})
+        bins = collection.distinct('bin_id')
+        
+        return jsonify({
+            'total_readings': count,
+            'bins': bins,
+            'status': 'connected'
+        })
+    except Exception as e:
+        return jsonify({'error': str(e)})
+
+@app.route('/api/db/recent')
+def db_recent():
+    if not collection:
+        return jsonify({'error': 'Database not available'})
+    
+    try:
+        limit = request.args.get('limit', 10, type=int)
+        data = list(collection.find(
+            {},
+            {'_id': 0, 'bin_id': 1, 'location': 1, 'fill_level': 1, 'status': 1}
+        ).sort('_id', -1).limit(limit))
+        
+        return jsonify({'recent': data})
+    except Exception as e:
+        return jsonify({'error': str(e)})
+
+@app.route('/api/db/history/<bin_id>')
+def db_history(bin_id):
+    if not collection:
+        return jsonify({'error': 'Database not available'})
+    
+    try:
+        limit = request.args.get('limit', 10, type=int)
+        data = list(collection.find(
+            {'bin_id': bin_id},
+            {'_id': 0, 'bin_id': 1, 'location': 1, 'fill_level': 1, 'status': 1}
+        ).sort('_id', -1).limit(limit))
+        
+        return jsonify({'readings': data})
+    except Exception as e:
+        return jsonify({'error': str(e)})
 
 if __name__ == '__main__':
     print("=" * 60)
-    print("SMART BIN LIVE DASHBOARD")
+    print("🚀 SMART BIN DASHBOARD WITH MONGODB")
     print("=" * 60)
-    print("Access: http:// YOUR EXTERNAL VM IP:5000")
+    print("Access: http://136.112.221.13:5000")
+    print("API Endpoints:")
+    print("  /api/data           - Live data")
+    print("  /api/db/stats       - Database stats")
+    print("  /api/db/recent      - Recent readings")
     print("=" * 60)
-    app.run(host='0.0.0.0', port=5000, debug=False)
+    app.run(host='0.0.0.0', port=5000, debug=False, threaded=True)

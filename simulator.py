@@ -7,6 +7,7 @@ import random
 client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2)
 client.connect("localhost", 1883, 60)
 
+# Keep the original order
 bins = ["BIN_001", "BIN_002", "BIN_003", "BIN_004", "BIN_005"]
 locations = ["CS Building", "Library", "Cafe", "Parking", "Hostel"]
 
@@ -14,6 +15,7 @@ print("=" * 50)
 print("Smart Bin Simulator")
 print("=" * 50)
 print("Sending data every 10 seconds")
+print("Bins in order: BIN_001 to BIN_005")
 print("Press Ctrl+C to stop")
 print("=" * 50)
 
@@ -23,10 +25,11 @@ try:
         counter += 1
         print(f"\n📦 CYCLE {counter} - {time.strftime('%H:%M:%S')}")
         print("-" * 40)
-        
+
+        # Send in order from BIN_001 to BIN_005
         for i in range(5):
             fill = random.randint(0, 100)
-            
+
             if fill < 30:
                 status = "LOW"
                 icon = "🟢"
@@ -39,7 +42,7 @@ try:
             else:
                 status = "OVERFLOW"
                 icon = "🔴"
-            
+
             data = {
                 "bin_id": bins[i],
                 "location": locations[i],
@@ -49,16 +52,16 @@ try:
                 "timestamp": time.strftime("%H:%M:%S"),
                 "cycle": counter
             }
-            
+
             client.publish("smartbin/live", json.dumps(data))
             print(f"{icon} {bins[i]}: {fill}%")
-            
-            time.sleep(0.5)
-        
+
+            time.sleep(0.5)  # Small delay between bins
+
         print("-" * 40)
-        print(f"⏰ Next update in 10 seconds...")
+        print(f" Next update in 10 seconds...")
         time.sleep(10)
-        
+
 except KeyboardInterrupt:
     print("\n\n" + "=" * 50)
     print("Simulator stopped")
