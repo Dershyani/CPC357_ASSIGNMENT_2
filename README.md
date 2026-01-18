@@ -19,85 +19,81 @@ This project is developed as part of **CPC357 – IoT Architecture and Smart App
 
 ---
 
-## GCP Deployment Guide
+## Cloud Environment Setup
 
-### 1. Configure Firewall Rules
-
-Create the following **Ingress** firewall rules in **VPC Network → Firewall**:
-
-| Name            | Port     | Purpose         |
-| --------------- | -------- | --------------- |
-| allow-mqtt-1883 | TCP 1883 | MQTT Broker     |
-| allow-http-5000 | TCP 5000 | Flask Dashboard |
-
-Source range: `0.0.0.0/0`
+### VM Configuration:
+- Machine Type: `e2-micro`
+- Boot Disk: 10GB, Ubuntu 20.04 LTS
+- Firewall Rules: Allow HTTP and HTTPS traffic
 
 ---
 
-### 2. Create VM Instance
+## Environment Setup
 
-* Machine Type: `e2-micro`
-* OS: Ubuntu 20.04 / 22.04 LTS
-* Disk Size: 10 GB
-* Enable HTTP/HTTPS traffic
+### 1. Once the VM is running, connect via SSH to set up the development environment.
 
----
-
-### 3. VM Environment Setup (SSH)
+### 2. Update system packages and install dependencies:
 
 ```bash
-sudo apt-get update
-sudo apt-get install -y mosquitto mosquitto-clients python3-pip git mongodb
-
-# Clone repository
-git clone https://github.com/Dershyani/CPC357_ASSIGNMENT_2.git
-cd CPC357_ASSIGNMENT_2
-
-# Configure Mosquitto
-sudo nano /etc/mosquitto/mosquitto.conf
+sudo apt update && sudo apt upgrade -y
+sudo apt install python3-pip git -y
 ```
 
-Add:
-
-```
-listener 1883
-allow_anonymous true
-```
+### 3. Install the MQTT broker (Mosquitto) and ensure it is running:
 
 ```bash
+sudo apt install -y mosquitto
 sudo systemctl start mosquitto
 sudo systemctl enable mosquitto
+systemctl status mosquitto
+```
 
+### 4. Clone the project repository:
+
+```bash
+git clone https://github.com/Dershyani/CPC357_ASSIGNMENT_2.git
+cd CPC357_ASSIGNMENT_2
+```
+
+### 5. Install Python dependencies:
+
+```bash
 pip3 install -r requirements.txt
 ```
 
----
-
-### 4. Run the System (3 Terminals)
-
-**Terminal 1 – MQTT Subscriber (optional monitoring)**
+### 6. The system uses MongoDB to store historical bin readings, so install MongoDB:
 
 ```bash
-mosquitto_sub -t "smartbin/#" -v
+sudo apt install -y mongodb
+sudo systemctl start mongodb
+sudo systemctl enable mongodb
 ```
 
-**Terminal 2 – Start Simulator**
+### 7. Running the IoT Simulation:
+
+The smart bin system is simulated using the simulator.py script, which acts as both the sensor and the ESP32 microcontroller. The simulator generates fill-level data for each bin every 10 seconds and publishes it via MQTT.
+
+### 8. Open a new SSH session, and start the simulator:
 
 ```bash
+cd CPC357_ASSIGNMENT_2
 python3 simulator.py
 ```
 
-**Terminal 3 – Start Dashboard Backend**
+### 9. Running the Dashboard Backend:
+
+The Flask server processes incoming MQTT messages, stores data in MongoDB, and serves the live dashboard.
+
+### 10. Open a second SSH session, and start the Flask server:
 
 ```bash
+cd CPC357_ASSIGNMENT_2
 python3 dashboard.py
 ```
 
----
+The server subscribes to MQTT topics, updates in-memory data, and exposes RESTful APIs for live and historical data.
 
-### 5. Access Dashboard
-
-Open a browser and navigate to:
+### 11. Access the dashboard via a browser at:
 
 ```
 http://<VM_EXTERNAL_IP>:5000
@@ -109,4 +105,3 @@ http://<VM_EXTERNAL_IP>:5000
 
 * **Dershyani A/P B. Thessaruva** – 164062
 * **Lithia A/P Kisnen** – 163850
-
