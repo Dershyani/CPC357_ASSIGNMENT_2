@@ -1,98 +1,112 @@
-# 🗑️ Smart Bin Monitoring System
+# CPC357: Smart Bin Monitoring System
 
-A real-time smart bin monitoring system built with Python, MQTT, and Flask.  
-This IoT application simulates multiple smart bins with varying fill levels and displays them on a live dashboard.
+A cloud-based IoT application for real-time monitoring of waste bin fill levels using MQTT communication, Flask backend services, MongoDB storage, and an interactive web dashboard deployed on Google Cloud Platform (GCP).
 
-Project Structure
-smart-bin-monitoring/
-├── simulator.py          # MQTT publisher
-├── dashboard.py          # Flask dashboard
-├── README.md             # Documentation
-└── requirements.txt      # Dependencies
+This project is developed as part of **CPC357 – IoT Architecture and Smart Applications** (Assignment 2).
 
+---
 
+## Technology Stack
 
-## GCP Deployment
+| Component          | Technology                      |
+| ------------------ | ------------------------------- |
+| IoT Simulation     | Python                          |
+| Data Communication | MQTT (Mosquitto, paho-mqtt)     |
+| Backend Server     | Flask                           |
+| Database           | MongoDB (pymongo)               |
+| Frontend           | HTML, CSS, JavaScript, Chart.js |
+| Cloud Platform     | Google Cloud Platform (GCP)     |
 
-### 1. Create VM Instance
+---
 
-- **Machine Type**: e2-micro  
-- **Boot Disk**: 10GB, Ubuntu 20.04 LTS  
-- **Firewall**: Allow HTTP & HTTPS traffic
+## GCP Deployment Guide
 
-### 2. Setup Commands (GCP SSH)
+### 1. Configure Firewall Rules
+
+Create the following **Ingress** firewall rules in **VPC Network → Firewall**:
+
+| Name            | Port     | Purpose         |
+| --------------- | -------- | --------------- |
+| allow-mqtt-1883 | TCP 1883 | MQTT Broker     |
+| allow-http-5000 | TCP 5000 | Flask Dashboard |
+
+Source range: `0.0.0.0/0`
+
+---
+
+### 2. Create VM Instance
+
+* Machine Type: `e2-micro`
+* OS: Ubuntu 20.04 / 22.04 LTS
+* Disk Size: 10 GB
+* Enable HTTP/HTTPS traffic
+
+---
+
+### 3. VM Environment Setup (SSH)
 
 ```bash
-# Update system
-sudo apt update && sudo apt upgrade -y
-sudo apt install -y python3 python3-pip python3-venv git mosquitto mosquitto-clients
+sudo apt-get update
+sudo apt-get install -y mosquitto mosquitto-clients python3-pip git mongodb
 
-# Clone project
+# Clone repository
 git clone https://github.com/Dershyani/CPC357_ASSIGNMENT_2.git
 cd CPC357_ASSIGNMENT_2
 
-create virtual environment
-python3 -m venv venv
-source venv/bin/activate
-
-# Install dependencies
-pip install -r requirements.txt
-# or
-pip install flask paho-mqtt
-
-Run the Smart Bin System
-# Start MQTT Broker
-sudo systemctl start mosquitto
-
-# In separate terminal, run simulator
-python3 simulator.py
-
-# In another terminal, run dashboard
-python3 dashboard.py
-
-Open a browser and go to:
-http://<YOUR_VM_EXTERNAL_IP>:5000
+# Configure Mosquitto
+sudo nano /etc/mosquitto/mosquitto.conf
 ```
-Project Features
 
-Real-time Monitoring: Live updates every 10 seconds
+Add:
 
-Visual Status Indicators: Color-coded status with emojis
+```
+listener 1883
+allow_anonymous true
+```
 
-🟢 LOW (0-29%)
+```bash
+sudo systemctl start mosquitto
+sudo systemctl enable mosquitto
 
-🟡 MODERATE (30-69%)
+pip3 install -r requirements.txt
+```
 
-🟠 HIGH (70-89%)
+---
 
-🔴 OVERFLOW (90-100%)
+### 4. Run the System (3 Terminals)
 
-Responsive Dashboard: Clean web interface with progress bars
+**Terminal 1 – MQTT Subscriber (optional monitoring)**
 
-MQTT Integration: Lightweight messaging protocol
+```bash
+mosquitto_sub -t "smartbin/#" -v
+```
 
-System Metrics: Total bins, average fill, bins needing emptying
+**Terminal 2 – Start Simulator**
 
-Automatic Updates: No page refresh needed
+```bash
+python3 simulator.py
+```
 
-MQTT Topics
+**Terminal 3 – Start Dashboard Backend**
 
-Topic: smartbin/live
+```bash
+python3 dashboard.py
+```
 
-Message Format (JSON):
+---
 
-{
-    "bin_id": "BIN_001",
-    "location": "CS Building",
-    "fill_level": 85,
-    "status": "HIGH",
-    "icon": "🟠",
-    "timestamp": "15:38:34"
-}
+### 5. Access Dashboard
 
+Open a browser and navigate to:
 
-Group Members
+```
+http://<VM_EXTERNAL_IP>:5000
+```
 
-Dershyani A/P B.Thessaruva - 164062
+---
 
-Lithia A/P Kisnen - 163850
+## Group Members
+
+* **Dershyani A/P B. Thessaruva** – 164062
+* **Lithia A/P Kisnen** – 163850
+
