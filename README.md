@@ -36,8 +36,7 @@ This project is developed as part of **CPC357 – IoT Architecture and Smart App
       - Action: Allow
       - Targets: All instances in network
       - Source IP ranges: 0.0.0.0/0
-      - Protocols/Ports: 
-            - tcp:1883,5000,9001
+      - Protocols/Ports : tcp(1883,5000,9001)
 ---
 
 ## Environment Setup
