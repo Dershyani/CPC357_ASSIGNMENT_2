@@ -29,15 +29,15 @@ This project is developed as part of **CPC357 – IoT Architecture and Smart App
 #### Firewall Configuration:
 1. **Access Firewall Settings** in Google Cloud Console
 2. **Create New Rule** with these parameters:
-      -Name: allow-mqtt-flask
-      -Network: default
-      -Priority: 1000
-      -Direction: Ingress
-      -Action: Allow
-      -Targets: All instances in network
-      -Source IP ranges: 0.0.0.0/0
-      -Protocols/Ports: 
-            -tcp:1883,5000,9001
+      - Name: allow-mqtt-flask
+      - Network: default
+      - Priority: 1000
+      - Direction: Ingress
+      - Action: Allow
+      - Targets: All instances in network
+      - Source IP ranges: 0.0.0.0/0
+      - Protocols/Ports: 
+            - tcp:1883,5000,9001
 ---
 
 ## Environment Setup
