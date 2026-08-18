@@ -1,4 +1,4 @@
-# CPC357: Smart Bin Monitoring System
+# Smart Bin Monitoring System
 
 A cloud-based IoT application for real-time monitoring of waste bin fill levels using MQTT communication, Flask backend services, MongoDB storage, and an interactive web dashboard deployed on Google Cloud Platform (GCP).
 
